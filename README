@@ -1,0 +1,8 @@
+This is a Matrix server written in Common Lisp.
+
+This is primarily a learning experience.
+
+But if this becomes bigger, some goals I have:
+- Be fast
+- Be easily extensible
+
