@@ -217,13 +217,15 @@
   `(("flows" . ,(vector (alex:alist-hash-table '(("type" . "m.login.password")))))))
 
 (defun username-available (path-arr env)
-  (let ((username (assoc "username" (query-params env) :test 'equal)))
-    (if username
-	(let (user (matrix-database:get-user username))
-	  (if user
-	      (json-error :m_user_in_use "pick another username!!" 400)
-	      (json-response '(("available" . t)))))
-	(json-error :m_invalid_username "enter a username!!" 400))))
+  (let ((username (cdr (assoc "username" (query-params env) :test 'equal))))
+    (cond
+      ((not username)            (json-error :m_invalid_username "enter a username!!" 400))
+      ((> (length username) 100) (json-error :m_invalid_username "username too long" 400))
+      (t	                 (let ((user (matrix-database:get-user username)))
+				   (if user
+				       (json-error :m_user_in_use "pick another username!!" 400)
+				       (json-response '(("available" . t)))))))))
+	
     
 ;;; OPTIONS
 (defun options (path-arr env)
