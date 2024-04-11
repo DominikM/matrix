@@ -145,12 +145,14 @@
        (progn ,@body)))
 
 (defun intercept-unfinished-auth (env &optional reg)
-  (let ((auth-json  (auth-json env)))
+  (let ((auth-json (auth-json env)))
     (if auth-json
-	(let ((session-id (gethash "session" auth-json))
-	      (session    (gethash session-id *auth-session*)))
+	(let* ((session-id (gethash "session" auth-json))
+	       (session    (gethash session-id *auth-session*)))
 	  (continue-unfinished-auth session))
 	(start-new-auth reg))))
+
+(defun continue-unfinished-auth (session) nil)
 
 (defun start-new-auth (reg)
   (let ((session-id (write-to-string (uuid:make-v4-uuid)))
