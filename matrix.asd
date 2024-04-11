@@ -8,4 +8,5 @@
 	       :clsql-postgresql-socket3
 	       :alexandria
 	       :uuid)
-  :components ((:file "matrix")))
+  :components ((:file "matrix-database")
+	       (:file "matrix")))
