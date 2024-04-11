@@ -185,10 +185,11 @@
 ;; API
 
 (defparameter *get-routes*
-  '(("^/.well-known/matrix/client$"    . well-known-client)
-    ("^/_matrix/client/versions$"      . versions)
-    ("^/_matrix/client/v3/needs_auth$" . need-auth)
-    ("^/_matrix/client/v3/login$"      . login-get)))
+  '(("^/.well-known/matrix/client$"            . well-known-client)
+    ("^/_matrix/client/versions$"              . versions)
+    ("^/_matrix/client/v3/needs_auth$"         . need-auth)
+    ("^/_matrix/client/v3/login$"              . login-get)
+    ("^/_matrix/client/v3/register/available$" . username-available)))
 
 (defparameter *post-routes*
   '(("^/_matrix/client/v3/register$"   . register)
@@ -215,6 +216,15 @@
 (defun login-flow-password ()
   `(("flows" . ,(vector (alex:alist-hash-table '(("type" . "m.login.password")))))))
 
+(defun username-available (path-arr env)
+  (let ((username (assoc "username" (query-params env) :test 'equal)))
+    (if username
+	(let (user (matrix-database:get-user username))
+	  (if user
+	      (json-error :m_user_in_use "pick another username!!" 400)
+	      (json-response '(("available" . t)))))
+	(json-error :m_invalid_username "enter a username!!" 400))))
+    
 ;;; OPTIONS
 (defun options (path-arr env)
   (json-response '() 200))
