@@ -120,25 +120,28 @@
   (gethash "auth" (getf env :json-body)))
 
 (defstruct auth-flow
+  id
   completed
   completed-stages ;; list of completed stages
   possible-stages) ;; list of lists of possible stages
 
-(defun registration-auth-flow ()
+(defun registration-auth-flow (id)
   (make-auth-flow
+   :id id
    :possible-stages '(("m.login.dummy"))))
 
-(defun login-auth-flow ()
+(defun login-auth-flow (id)
   (make-auth-flow
+   :id id
    :possible-stages '(("m.login.password"))))
 
-(defun auth-flow-alist (flow session &optional (params (make-hash-table)))
+(defun auth-flow-alist (flow &optional (params (make-hash-table)))
   `(("flows" .
 	     ,(coerce
 	       (mapcar (lambda (f) (alex:alist-hash-table `(("stages" . ,f)))) (auth-flow-possible-stages flow))
 	       'vector))
     ("params" . ,params)
-    ("session" . ,session)))
+    ("session" . ,(auth-flow-id flow))))
 
 (defmacro with-user-interactive-auth (env-var reg-var &rest body)
   `(or (intercept-unfinished-auth ,env-var ,reg-var)
@@ -149,18 +152,64 @@
     (if auth-json
 	(let* ((session-id (gethash "session" auth-json))
 	       (session    (gethash session-id *auth-session*)))
-	  (continue-unfinished-auth session))
+	  (continue-unfinished-auth auth-json session))
 	(start-new-auth reg))))
 
-(defun continue-unfinished-auth (session) nil)
+(defun continue-unfinished-auth (auth-json session)
+  (let* ((request-auth-stage (gethash "type" auth-json))
+	 (expected-next      (and session (expected-next-stages session)))
+	 (valid?             (member request-auth-stage expected-next :test 'equal)))
+    (format t "~a ~a ~a ~%" request-auth-stage expected-next valid?)
+    (if valid?
+	(multiple-value-bind (success? repeat? result) (do-auth-stage request-auth-stage auth-json session)
+	  (if success?
+	      (push request-auth-stage (cdr (last (auth-flow-completed session)))))
+	  (cond
+	    ( ;; success and final stage
+	     (and success? (completed-auth-flow? session))
+	     (remhash (auth-flow-id session) *auth-session*)
+	     nil)
+	    ( ;; success and more to do
+	     success?
+	     (json-response (auth-flow-alist session)) 401)
+	    ( ;; fail but let's try again
+	     (and (not success?) repeat?)
+	     (json-response (append result (auth-flow-alist session)) 401))
+	    ( ;; fail and we're done here
+	     (not (or success? repeat?))
+	     (remhash (auth-flow-id session) *auth-session*)
+	     (json-response result 400))))
+	(json-error :m_unauthorized "invalid auth stage"))))
+
+(defun do-auth-stage (auth-stage auth-json auth-flow)
+  (case auth-stage
+    ("m.login.dummy" (values t nil nil))))
+
+(defun completed-auth-flow? (auth-flow)
+  (member (auth-flow-completed-stages auth-flow) (auth-flow-possible-stages auth-flow)))
+    
+(defun expected-next-stages (auth-flow)
+  (with-slots (completed-stages possible-stages) auth-flow
+    (let ((remaining-stages possible-stages))
+      (dolist (completed-stage completed-stages)
+	(setq remaining-stages
+	      (mapcar (lambda (stages)
+			(if (equal (car stages) completed-stage)
+			    (cdr stages)
+			    nil))
+		      remaining-stages)))
+      (setq remaining-stages (mapcar #'car remaining-stages))
+      (remove nil remaining-stages))))
+      
+  
 
 (defun start-new-auth (reg)
-  (let ((session-id (write-to-string (uuid:make-v4-uuid)))
-	(this-flow (if reg
-			    (registration-auth-flow)
-			    (login-auth-flow))))
+  (let* ((session-id (write-to-string (uuid:make-v4-uuid)))
+	 (this-flow (if reg
+			(registration-auth-flow session-id)
+			(login-auth-flow session-id))))
     (setf (gethash session-id *auth-session*) this-flow)
-    (json-response (auth-flow-alist this-flow session-id) 401)))
+    (json-response (auth-flow-alist this-flow) 401)))
 
 (defun header-access-token (env)
   (let* ((headers (headers env))
