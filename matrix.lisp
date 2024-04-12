@@ -149,7 +149,7 @@
 
 (defun intercept-unfinished-auth (env &optional reg)
   (let ((auth-json (auth-json env)))
-    (if auth-json
+    (if auth-json 
 	(let* ((session-id (gethash "session" auth-json))
 	       (session    (gethash session-id *auth-session*)))
 	  (continue-unfinished-auth auth-json session))
@@ -163,7 +163,7 @@
     (if valid?
 	(multiple-value-bind (success? repeat? result) (do-auth-stage request-auth-stage auth-json session)
 	  (if success?
-	      (push request-auth-stage (cdr (last (auth-flow-completed session)))))
+	      (nconc (auth-flow-completed-stages session) (list request-auth-stage)))
 	  (cond
 	    ( ;; success and final stage
 	     (and success? (completed-auth-flow? session))
@@ -182,11 +182,11 @@
 	(json-error :m_unauthorized "invalid auth stage"))))
 
 (defun do-auth-stage (auth-stage auth-json auth-flow)
-  (case auth-stage
-    ("m.login.dummy" (values t nil nil))))
+  (cond
+    ((equal auth-stage "m.login.dummy") (values t nil nil))))
 
 (defun completed-auth-flow? (auth-flow)
-  (member (auth-flow-completed-stages auth-flow) (auth-flow-possible-stages auth-flow)))
+  (member (auth-flow-completed-stages auth-flow) (auth-flow-possible-stages auth-flow)) :test 'equal)
     
 (defun expected-next-stages (auth-flow)
   (with-slots (completed-stages possible-stages) auth-flow
