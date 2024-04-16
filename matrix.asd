@@ -7,6 +7,7 @@
 	       :com.inuoe.jzon
 	       :clsql-postgresql-socket3
 	       :alexandria
-	       :uuid)
+	       :uuid
+	       :cl-pass)
   :components ((:file "matrix-database")
 	       (:file "matrix")))

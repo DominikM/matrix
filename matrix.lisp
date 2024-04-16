@@ -285,9 +285,28 @@
 ;;; POST
 (defun register (path-arr env)
   (with-user-interactive-auth env t
-    (json-response '((:message . "register")) 200)))
+    (let* ((json-body (json-body env))
+	   (device-id (or (gethash "device_id" json-body)
+			 (write-to-string (uuid:make-v4-uuid))))
+	   (inhibit-login? (gethash "inhibit_login" json-body))
+	   (initial-device-display-name (gethash "initial_device_display_name" json-body))
+	   (password (gethash "password" json-body))
+	   (username (gethash "username" json-body))
+	   (new-user (matrix-database:create-user username password))
+	   (new-device (matrix-database:create-device username device-id initial-device-display-name))
+	   (response (list '("home_server" . "localhost.test")
+			   `("refresh_token" . ,(getf new-device :refresh-token))
+			   `("user_id" . ,(format nil "@~a:localhost.test" username)))))
+      (unless inhibit-login?
+	(setq response
+	      (append response (list (cons "access_token" (getf new-device :access-token))
+				     (cons "device_id" (getf new-device :id))))))
+      (json-response response))))
+    
+      
+      
 
 (defun login (path-arr env)
-  (with-user-interactive-auth env nil
-    (json-response '((:message . "login")) 200)))
+  (with-user-interactive-auth env nil))
+
 
